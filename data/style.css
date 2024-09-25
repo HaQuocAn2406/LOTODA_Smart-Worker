@@ -1,0 +1,148 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: white;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+  }
+  
+  header {
+    background-color: #007BFF;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    font-size: 18px;
+  }
+  
+  .container {
+    padding: 10px;
+    max-width: 500px;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  
+  .info-box,
+  .scan-box,
+  .sensor-box {
+    border: 1px solid #007BFF;
+    padding: 10px;
+    margin: 15px 0;
+    box-sizing: border-box;
+    /* Ensures content fits inside the box */
+  }
+  
+  label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+  }
+  
+  input[type="text"],
+  input[type="password"],
+  button {
+    width: 100%;
+    padding: 8px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+    /* Ensures inputs fit inside the container */
+  }
+  
+  button {
+    background-color: #007BFF;
+    color: white;
+    cursor: pointer;
+  }
+  
+  button:hover {
+    background-color: #0056b3;
+  }
+  
+  .sensor-box {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .sensor-box div {
+    width: 45%;
+    text-align: center;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  
+  h3 {
+    font-size: 16px;
+  }
+  
+  p {
+    font-size: 14px;
+  }
+  
+  .switch {
+    position: relative;
+    display: inline-block;
+    top: 45px;
+    width: 60px;
+    height: 34px;
+  }
+  
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 34px;
+  }
+  
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+  
+  input:checked+.slider {
+    background-color: #007BFF;
+  }
+  
+  input:checked+.slider:before {
+    transform: translateX(26px);
+  }
+  
+  #circle {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: rgb(204, 200, 200);
+    margin-top: -60px;
+    transition: background-color 0.4s ease;
+  }
+  input[readonly] {
+    background-color: #f0f0f0; /* Lighter background for read-only input */
+    color: #666;              /* Gray text for read-only */
+  }
+  
+  input:not([readonly]) {
+    background-color: #fff;   /* Normal background for editable input */
+    color: #000;              /* Black text for editable input */
+  }

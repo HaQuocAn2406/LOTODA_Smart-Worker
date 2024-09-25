@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Manager</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <h1>WiFi Manager</h1>
+    </header>
+
+    <div class="container">
+        <!-- Display SSID, IP, MAC -->
+        <div class="info-box">
+            <label>Connected WiFi:</label>
+            <p ><strong>SSID:</strong><p id="ssid_connected" >MyWiFiNetwork</p></p>
+            <p ><strong>IP Address:</strong> <p id="ip">192.168.1.101</p> </p>
+            <p ><strong>MAC Address:</strong> <p id="mac">00:1A:2B:3C:4D:5E</p></p>
+        </div>
+        <!-- WiFi Scanning -->
+        <div class="scan-box">
+            <label>Scan for WiFi Networks:</label>
+            <button onclick="scanNetworks()">Scan</button>
+            <div id="networks"></div>
+            <div id="wifi-list"></div>
+            <div class="connect-box">
+                <form id="myForm" action="/submit" method="POST">
+                    <div class="form-group">
+                        <label for="ssidInput">SSID</label>
+                        <input type="text" id="ssidInput" name="ssidInput" placeholder="Your SSID">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" placeholder="Your Password">
+                    </div>
+                    <button type="button" onclick="submitNetwork()">Connect</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Connect to New WiFi -->
+    </div>
+    <script src="/script.js" defer></script>
+</body>
+
+</html>
