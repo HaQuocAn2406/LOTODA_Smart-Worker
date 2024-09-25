@@ -8,7 +8,7 @@
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 char str[32] = "";
-String UID_Result;
+// String UID_Result;
 
 void byteArray_to_string(byte array[], unsigned int len, char buffer[]) {
   for (unsigned int i = 0; i < len; i++) {
@@ -20,21 +20,21 @@ void byteArray_to_string(byte array[], unsigned int len, char buffer[]) {
   buffer[len*2] = '\0';
 }
 
-int getUID() {
+bool getUID() {
   if(!mfrc522.PICC_IsNewCardPresent()) {
-    return 0;
+    return false;
   }
   if(!mfrc522.PICC_ReadCardSerial()) {
-    return 0;
+    return false;
   }
   
   byteArray_to_string(mfrc522.uid.uidByte, mfrc522.uid.size, str);
-  UID_Result = str;
+  worker_UID = str;
 
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
   
-  return 1;
+  return true;
 }
 
 void Setup_RFID(){

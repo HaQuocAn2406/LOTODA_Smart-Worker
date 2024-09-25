@@ -8,32 +8,26 @@
 #include "EEPROMManager.h"
 #include "KeypadManager.h"
 #include "sever.h"
+#include "_SPIFFS.h"
+#define AC_SSID "LOTODA WiFi Config"
+#define AC_PASS "12345678"
 //----------------------------------------
 LCD_I2C lcd(0x3F, 20, 4); // Default address of most PCF8574 modules, change according
                           // Variable
 LOTODA_Server server;
-
 bool scanning = false;
-String wifiScanResult = "[]";
-
-int readsuccess;
-char customKey;
 bool cardScanned = false;
 bool writingToEEPROM = false;
-bool Status_star = true;
-int gio, phut, giay;
-// String result_product = "0", result_error = "0";
-int result_product = 0;
-int result_error = 0;
+bool Status_start = true;
+char customKey;
+String wifiScanResult = "[]";
 String timeString, time_end_String;
 String formattedDate;
 String data_time_start = "";
-char *Mac_text(uint8_t dia_chi_mac[]);
 String Device_ID;
-bool newDataReceived = true;// Not used
 String ssid = "", password = "";
-String AC_SSID = "LOTODA WiFi Config";
-String AC_PASS = "12345678";
+
+int gio, phut, giay;
 
 void handleScan()
 {
@@ -77,29 +71,35 @@ void scanWiFiNetworks(void *parameter) // task scan wifi
   }
 }
 
-void Read_Start()
+void Start_Screen()
 {
-  if (Status_star && customKey == 'A')
+  if (Status_start && customKey == 'A')
   {
     lcd.clear();
     lcd.setCursor(2, 0);
-    lcd.print("Moi quet the");
+    lcd.print("Scan Your Card");
     while (true)
     {
-      readsuccess = getUID();
-      if (readsuccess)
+      if (getUID())
       {
+        data.UID_Result = worker_UID;
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("Ma the:");
-        lcd.print(UID_Result);
+        lcd.print("Worker UID:");
+        lcd.print(worker_UID);
         cardScanned = true;
         lcd.setCursor(0, 2);
         lcd.print("Press B continue");
-        delay(1000);
         break; // Thoát khỏi vòng lặp khi đã đọc thành công thẻ
       }
     }
+  }
+  else if (cardScanned == false)
+  {
+    lcd.setCursor(1, 0);
+    lcd.print("Welcome LOTODA");
+    lcd.setCursor(1, 1);
+    lcd.print("Press A start");
   }
 }
 
@@ -120,7 +120,8 @@ void Get_Date()
     timeClient.forceUpdate();
   }
   formattedDate = timeClient.getFormattedDate();
-  Serial.printf("Date: %s\n",formattedDate);
+  Serial.print("Date: ");
+  Serial.println(formattedDate);
 }
 
 void Time_end()
@@ -138,7 +139,7 @@ void Time_end()
 
 void Time_work()
 {
-  Working_Time(eer_gio_read, eer_phut_read, eer_giay_read);
+  Working_Time(gio_start, phut_start, giay_start);
   Serial.print("time_work");
   Serial.print(":");
   Serial.print(gio_lam_viec);
@@ -159,36 +160,36 @@ void Time_work()
   lcd.print("GoodBye!!");
 }
 
-void scrollMessage(int row, String message, int delayTime, int totalColumns)
-{
+// void scrollMessage(int row, String message, int delayTime, int totalColumns)
+// {
 
-  for (int i = 0; i < totalColumns; i++)
-  {
+//   for (int i = 0; i < totalColumns; i++)
+//   {
 
-    message = " " + message;
-  }
+//     message = " " + message;
+//   }
 
-  message = message + " ";
+//   message = message + " ";
 
-  for (int position = 0; position < message.length(); position++)
-  {
+//   for (int position = 0; position < message.length(); position++)
+//   {
 
-    lcd.setCursor(0, row);
+//     lcd.setCursor(0, row);
 
-    lcd.print(message.substring(position, position + totalColumns));
+//     lcd.print(message.substring(position, position + totalColumns));
 
-    delay(delayTime);
-  }
-}
+//     delay(delayTime);
+//   }
+// }
 
 void Working_Screen()
 {
   lcd.setCursor(0, 0);
   lcd.print("ID:");
-  lcd.print(worker_UID);
+  lcd.print(data.UID_Result);
   lcd.setCursor(11, 0);
   lcd.print("  ");
-  lcd.setCursor(13, 0);
+  lcd.setCursor(12, 0);
   if (gio < 10)
   {
     lcd.print("0");
@@ -200,22 +201,28 @@ void Working_Screen()
     lcd.print("0");
   }
   lcd.print(phut);
+  lcd.print(":");
+  if (giay < 10)
+  {
+    lcd.print("0");
+  }
+  lcd.print(giay);
   lcd.setCursor(0, 1);
   lcd.print("D sp: ");
-  if (result_product  >= 999)
+  if (data.product >= 999)
   {
     lcd.setCursor(5, 1);
   }
-  lcd.print(result_product);
+  lcd.print(data.product);
   lcd.setCursor(9, 1);
   lcd.print("|");
   lcd.setCursor(11, 1);
   lcd.print("B Er: ");
-  if (result_error >= 999)
+  if (data.error >= 999)
   {
     lcd.setCursor(16, 1);
   }
-  lcd.print(result_error);
+  lcd.print(data.error);
   lcd.setCursor(0, 3);
   lcd.print("Target: ");
   lcd.setCursor(8, 3);
@@ -238,18 +245,19 @@ void Save_EEPROM()
 {
   if (cardScanned && (customKey == 'B'))
   {
-    saveStringToEEPROM(UID_Result, 0);
+    // saveStringToEEPROM(UID_Result, 0);
+    writeStruct("/data.bin", data);
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Loading......");
     delay(3000);
     Time_start();
     Get_Date();
-    push_mqtt1(formattedDate, Device_ID, UID_Result, timeString, time_end_String, time_work_String, result_product, result_error);
+    push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error);
     lcd.clear();
     lcd.setCursor(3, 0);
     lcd.print("DA XONG");
-    Status_star = false;
+    Status_start = false;
     cardScanned = false; // Reset trạng thái đã quét thẻ
     delay(2000);
     check = true;
@@ -264,65 +272,60 @@ void Stop_work()
   lcd.setCursor(2, 1);
   lcd.print("Sp:");
   lcd.setCursor(6, 1);
-  lcd.print(result_product);
-  lcd.setCursor(12, 1);
+  lcd.print(data.product);
+  lcd.setCursor(17, 1);
   lcd.print("pcs");
   lcd.setCursor(2, 2);
   lcd.print("Error:");
   lcd.setCursor(9, 2);
-  lcd.print(result_error);
-  lcd.setCursor(12, 2);
+  lcd.print(data.error);
+  lcd.setCursor(17, 2);
   lcd.print("pcs");
   lcd.setCursor(0, 3);
   lcd.print(" * Back");
   while (true)
   {
     char key = customKeypad.getKey();
-    readsuccess = getUID();
-    if (readsuccess)
+    if (getUID())
     {
-      Serial.println(readsuccess);
       lcd.clear();
-      if (worker_UID == UID_Result)
+      if (worker_UID == data.UID_Result)
       {
         Time_end();
         Time_work();
         Get_Date();
-        push_mqtt1(formattedDate, Device_ID, UID_Result, timeString, time_end_String, time_work_String, result_product, result_error);
+        push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error);
         Clear_EEPROM();
-        worker_UID = "";
-        UID_Result = "";
-        gio_string = "";
-        phut_string = "";
-        result_error = 0;
-        result_product = 0;
-        giay_string = "";
+        // worker_UID = "";
+        data.UID_Result = "";
         time_end_String = "";
         time_work_String = "";
-        delay(5000);
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.print("Welcome LOTODA");
-        lcd.setCursor(1, 1);
-        lcd.print("Press A start");
+        data.error = 0;
+        data.product = 0;
         check = false;
-        Status_star = true;
-        Serial.println("yes");
+        Status_start = true;
+        writeStruct("/data.bin", data);
+        delay(100);
+        lcd.clear();
+        // lcd.setCursor(1, 0);
+        // lcd.print("Welcome LOTODA");
+        // lcd.setCursor(1, 1);
+        // lcd.print("Press A start");
         break; // Thoát khỏi vòng lặp sau khi quét thẻ thành công
       }
       else
       {
         lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("The sai");
+        lcd.setCursor(3, 1);
+        lcd.print("Wrong Card");
         Serial.println("no");
         delay(1000);
         break; // Thoát khỏi vòng lặp sau khi quét thẻ thành công
       }
     }
     else if (key == '*')
-    { // thoát khỏi vòng lăp
-      Serial.println("khac");
+    { // back
+      Serial.println("Back");
       lcd.clear();
       break;
     }
@@ -335,42 +338,42 @@ void Enter_product()
   lcd.setCursor(0, 0);
   lcd.print("# Save | * Back");
   lcd.setCursor(0, 1);
-  lcd.print("So sp:");
-  lcd.setCursor(8, 1);
-  lcd.print(result_product);
+  lcd.print("No.Product:");
+  lcd.setCursor(13, 1);
+  lcd.print(data.product);
+  int temp = data.product;
   while (true)
   {
     char key = customKeypad.getKey();
     if (key == '1')
     {
-      result_product = result_product + 1;
-      lcd.setCursor(8, 1);
-      lcd.print(result_product);
+      temp = temp + 1;
+      lcd.setCursor(13, 1);
+      lcd.print(temp);
     }
     else if (key == '2')
     {
-      if (result_product > 0)
+      if (temp > 0)
       {
-        result_product = result_product - 1;
-        lcd.setCursor(8, 1);
-        lcd.print("            ");
-        lcd.setCursor(8, 1);
-        lcd.print(result_product);
+        temp = temp - 1;
+        lcd.setCursor(13, 1);
+        lcd.print(temp);
       }
     }
 
     else if (key == '3')
     {
-      result_product = result_product + 5;
-      lcd.setCursor(8, 1);
-      lcd.print(result_product);
+      temp = temp + 5;
+      lcd.setCursor(13, 1);
+      lcd.print(temp);
     }
     else if (key == '#')
     {
       // Nếu người dùng ấn '#', thoát khỏi vòng lặp
       lcd.clear();
-      saveValueToEEPROM(result_product, 24);
-      Serial.println(result_product);
+      data.product = temp;
+      writeStruct("/data.bin", data);
+      Serial.println(data.product);
       break;
     }
     else if (key == '*')
@@ -387,41 +390,41 @@ void Enter_Error()
   lcd.setCursor(0, 0);
   lcd.print("# Save | * Back");
   lcd.setCursor(0, 1);
-  lcd.print("Sp Error:");
+  lcd.print("No.Error:");
   lcd.setCursor(10, 1);
-  lcd.print(result_error);
+  lcd.print(data.error);
+  int temp = data.error;
   while (true)
   {
     char key = customKeypad.getKey();
     if (key == '1')
     {
-      result_error = result_error + 1;
+      temp = temp + 1;
       lcd.setCursor(10, 1);
-      lcd.print(result_error);
+      lcd.print(temp);
     }
     else if (key == '2')
     {
-      if (result_error > 0)
+      if (temp > 0)
       {
-        result_error = result_error - 1;
+        temp = temp - 1;
         lcd.setCursor(10, 1);
-        lcd.print("            ");
-        lcd.setCursor(10, 1);
-        lcd.print(result_error);
+        lcd.print(temp);
       }
     }
     else if (key == '3')
     {
-      result_error = result_error + 5;
+      temp = temp + 5;
       lcd.setCursor(10, 1);
-      lcd.print(result_error);
+      lcd.print(temp);
     }
     else if (key == '#')
     {
       // Nếu người dùng ấn '#', thoát khỏi vòng lặp
       lcd.clear();
-      saveValueToEEPROM(result_error, 30);
-      Serial.println(result_error);
+      data.error = temp;
+      writeStruct("/data.bin", data);
+      Serial.println(data.error);
       break;
     }
     else if (key == '*')
@@ -461,51 +464,10 @@ void MAC_ID()
   uint8_t dia_chi_mac_wifi[6];
   WiFi.macAddress(dia_chi_mac_wifi);
   Serial.print("\nDefault ESP32 MAC Address: ");
-  Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\n", dia_chi_mac_wifi[0], dia_chi_mac_wifi[1], dia_chi_mac_wifi[2], dia_chi_mac_wifi[3], dia_chi_mac_wifi[4], dia_chi_mac_wifi[5]);
+  Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\n", dia_chi_mac_wifi[0], dia_chi_mac_wifi[1], dia_chi_mac_wifi[2],
+                dia_chi_mac_wifi[3], dia_chi_mac_wifi[4], dia_chi_mac_wifi[5]);
   Device_ID = Mac_text(dia_chi_mac_wifi);
   Serial.println("Combined result: " + String(Device_ID));
-}
-
-void writeFile(const char *path, const char *message)
-{
-  File file = SPIFFS.open(path, FILE_WRITE);
-
-  if (!file)
-  {
-    Serial.println("Failed to open file for writing");
-    return;
-  }
-
-  if (file.print(message))
-  {
-    Serial.println("File written successfully");
-  }
-  else
-  {
-    Serial.println("Failed to write file");
-  }
-
-  file.close(); // Don't forget to close the file
-}
-
-String readFile(fs::SPIFFSFS &fs, const char *path)
-{
-  Serial.printf("Reading file: %s\r\n", path);
-
-  File file = fs.open(path);
-  if (!file || file.isDirectory())
-  {
-    Serial.println("- failed to open file for reading");
-    return String();
-  }
-
-  String fileContent;
-  while (file.available())
-  {
-    fileContent = file.readStringUntil('\n');
-    break;
-  }
-  return fileContent;
 }
 
 void connect_WiFi()
@@ -563,14 +525,16 @@ void setup()
   // put your setup code here, to run once:
   Serial.begin(115200);
   EEPROM_begin();
-  Clear_EEPROM();
+  // Clear_EEPROM();
   MAC_ID();
   lcd.backlight();
   lcd.begin();
+
   ssid = readFile(SPIFFS, "/ssid.txt");
   password = readFile(SPIFFS, "/pass.txt");
   Serial.printf("SSID: %s\n", ssid);
   Serial.printf("PASS: %s\n", password);
+
   lcd.clear();
   connect_WiFi(); // Kết nối wifi
   handleScan();   // Nhận lệnh scan wifi
@@ -590,15 +554,14 @@ void setup()
   Setup_MQTT();
   Setup_Time();
   Setup_RFID();
-  readFull_EEPROMData();
+  readFull_EEPROMData(); // Đọc giờ bắt đầu ca làm mỗi khi khởi động--> Sẽ chuyển qua lưu trong file luôn
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Loading....");
   delay(1000);
   lcd.clear();
-  result_product = ReadValue_EEPROM(24);
-  result_error = ReadValue_EEPROM(30);
-  if (check == false)
+  readStruct("/data.bin", data);
+  if (data.UID_Result == "")
   {
     lcd.clear();
     lcd.setCursor(1, 0);
@@ -613,9 +576,10 @@ void setup()
     lcd.print("Welcome Back!");
     lcd.setCursor(3, 1);
     lcd.print("ID:");
-    lcd.print(worker_UID);
+    lcd.print(data.UID_Result);
     delay(3000);
     lcd.clear();
+    check = true;
   }
 }
 
@@ -634,8 +598,7 @@ void loop()
   }
   else
   {
-    Read_Start();
+    Start_Screen();
     Save_EEPROM();
   }
-  // delay(100);
 }

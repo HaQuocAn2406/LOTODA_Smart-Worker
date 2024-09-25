@@ -5,6 +5,6 @@
 
 
 void Setup_RFID();
-int getUID();
+bool getUID();
 
 #endif

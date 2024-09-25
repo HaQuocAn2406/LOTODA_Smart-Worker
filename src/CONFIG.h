@@ -3,6 +3,14 @@
 
 #include <Arduino.h>
 
+struct Data
+{
+
+    int product, error; // number of product
+    String UID_Result;
+};
+static Data data;
+
 extern String target;
 extern String mess;
 
@@ -14,11 +22,9 @@ extern String time_work_String;
 //-------- RFID -----------//
 extern String UID_Result;
 
+extern String timeString, time_end_String, formattedDate, Device_ID;
 
-extern String timeString,time_end_String,formattedDate,Device_ID;
-
-extern int eer_gio_read, eer_phut_read, eer_giay_read;
-extern String gio_string, phut_string, giay_string, worker_UID;
+extern String worker_UID;
 extern bool check;
 extern int result_product, result_error;
 

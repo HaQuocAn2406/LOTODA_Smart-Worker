@@ -61,31 +61,26 @@ String ReadString_EEPROM(int Address)
 
 void readFull_EEPROMData()
 {
-  if (EEPROM.read(0) != 0)
-  {
-    for (int i = 0; i < 8; ++i)
-    {
-      worker_UID += char(EEPROM.read(i));
-    }
+  // if (EEPROM.read(0) != 0)
+  // {
+    // for (int i = 0; i < 8; ++i)
+    // {
+    //   worker_UID += char(EEPROM.read(i));
+    // }
     gio_start = EEPROM.readInt(10);
     phut_start = EEPROM.readInt(15);
     giay_start = EEPROM.readInt(20);
 
-    worker_UID = worker_UID.c_str();
-    gio_string = gio_string.c_str();
-    phut_string = phut_string.c_str();
-    giay_string = giay_string.c_str();
-
-    eer_gio_read = gio_start;
-    eer_phut_read = phut_start;
-    eer_giay_read = giay_start;
+    // eer_gio_read = gio_start;
+    // eer_phut_read = phut_start;
+    // eer_giay_read = giay_start;
     Serial.println(worker_UID);
     Serial.print("time_start: ");
-    Serial.print(eer_gio_read);
+    Serial.print(gio_start);
     Serial.print(":");
-    Serial.print(eer_phut_read);
+    Serial.print(phut_start);
     Serial.print(":");
-    Serial.println(eer_giay_read);
-    check = true;
-  }
+    Serial.println(giay_start);
+  //   check = true;
+  // }
 }
