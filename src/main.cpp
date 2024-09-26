@@ -5,20 +5,24 @@
 #include "CONFIG.h"
 #include "TimeManager.h"
 #include "RFIDManager.h"
-#include "EEPROMManager.h"
 #include "KeypadManager.h"
 #include "sever.h"
 #include "_SPIFFS.h"
 #define AC_SSID "LOTODA WiFi Config"
 #define AC_PASS "12345678"
+#define PasswordLength 4
 //----------------------------------------
 LCD_I2C lcd(0x3F, 20, 4); // Default address of most PCF8574 modules, change according
                           // Variable
 LOTODA_Server server;
+
+Data data;
+bool check = false;
 bool scanning = false;
 bool cardScanned = false;
 bool writingToEEPROM = false;
 bool Status_start = true;
+bool passCorrect = false;
 char customKey;
 String wifiScanResult = "[]";
 String timeString, time_end_String;
@@ -71,6 +75,18 @@ void scanWiFiNetworks(void *parameter) // task scan wifi
   }
 }
 
+void Get_Date();
+
+void Save_EEPROM()
+{
+  Get_time_Start();
+  Get_Date();
+  // push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error);
+  Status_start = false;
+  cardScanned = false; // Reset trạng thái đã quét thẻ
+  check = true;
+}
+
 void Start_Screen()
 {
   if (Status_start && customKey == 'A')
@@ -82,15 +98,30 @@ void Start_Screen()
     {
       if (getUID())
       {
-        data.UID_Result = worker_UID;
+        data.UID_Result = UID;
+        writeStruct("/data.bin", data);
+        Serial.print("UID_Result; ");
+        Serial.println(data.UID_Result);
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("Worker UID:");
-        lcd.print(worker_UID);
+        lcd.print(data.UID_Result);
         cardScanned = true;
         lcd.setCursor(0, 2);
-        lcd.print("Press B continue");
+        lcd.print("Loading......");
+        connect_to_broker();
+        Save_EEPROM();
+        delay(2000);
+        lcd.clear();
+        lcd.setCursor(5, 1);
+        lcd.print("DONE!");
+        delay(2000);
+        lcd.clear();
         break; // Thoát khỏi vòng lặp khi đã đọc thành công thẻ
+      }
+      else
+      {
+        yield(); // avoid wdt enable
       }
     }
   }
@@ -101,16 +132,6 @@ void Start_Screen()
     lcd.setCursor(1, 1);
     lcd.print("Press A start");
   }
-}
-
-void Time_start()
-{
-  Get_time_Start(); // Thời gian bắt đầu vào ca làm
-  timeString = String(gio_start) + ":" + String(phut_start) + ":" + String(giay_start);
-  saveValueToEEPROM(gio_start, 10);
-  saveValueToEEPROM(phut_start, 15);
-  saveValueToEEPROM(giay_start, 20);
-  readFull_EEPROMData();
 }
 
 void Get_Date()
@@ -139,7 +160,8 @@ void Time_end()
 
 void Time_work()
 {
-  Working_Time(gio_start, phut_start, giay_start);
+  readStruct("/data.bin", data);
+  Working_Time(data.gio_start, data.phut_start, data.giay_start);
   Serial.print("time_work");
   Serial.print(":");
   Serial.print(gio_lam_viec);
@@ -181,7 +203,6 @@ void Time_work()
 //     delay(delayTime);
 //   }
 // }
-
 void Working_Screen()
 {
   lcd.setCursor(0, 0);
@@ -241,29 +262,6 @@ void Read_time()
   Working_Screen();
 }
 
-void Save_EEPROM()
-{
-  if (cardScanned && (customKey == 'B'))
-  {
-    // saveStringToEEPROM(UID_Result, 0);
-    writeStruct("/data.bin", data);
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Loading......");
-    delay(3000);
-    Time_start();
-    Get_Date();
-    push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error);
-    lcd.clear();
-    lcd.setCursor(3, 0);
-    lcd.print("DA XONG");
-    Status_start = false;
-    cardScanned = false; // Reset trạng thái đã quét thẻ
-    delay(2000);
-    check = true;
-  }
-}
-
 void Stop_work()
 {
   lcd.clear();
@@ -286,31 +284,26 @@ void Stop_work()
   while (true)
   {
     char key = customKeypad.getKey();
-    if (getUID())
+    if (getUID() || passCorrect == true)
     {
       lcd.clear();
-      if (worker_UID == data.UID_Result)
+      if (UID == data.UID_Result || UID == data.Admin_UID || passCorrect == true)
       {
         Time_end();
         Time_work();
         Get_Date();
         push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error);
-        Clear_EEPROM();
-        // worker_UID = "";
         data.UID_Result = "";
         time_end_String = "";
         time_work_String = "";
         data.error = 0;
         data.product = 0;
+        target = "0";
         check = false;
         Status_start = true;
         writeStruct("/data.bin", data);
-        delay(100);
+        delay(2000);
         lcd.clear();
-        // lcd.setCursor(1, 0);
-        // lcd.print("Welcome LOTODA");
-        // lcd.setCursor(1, 1);
-        // lcd.print("Press A start");
         break; // Thoát khỏi vòng lặp sau khi quét thẻ thành công
       }
       else
@@ -470,6 +463,13 @@ void MAC_ID()
   Serial.println("Combined result: " + String(Device_ID));
 }
 
+void wifiConfig()
+{
+  writeFile("/ssid.txt", "");
+  writeFile("/pass.txt", "");
+  ESP.restart();
+}
+
 void connect_WiFi()
 {
   if (ssid == "" || password == "")
@@ -477,6 +477,10 @@ void connect_WiFi()
     WiFi.softAP(AC_SSID, AC_PASS);
     lcd.setCursor(0, 0);
     lcd.print("Config mode running");
+    lcd.setCursor(0, 2);
+    lcd.print("IP:");
+    lcd.setCursor(5, 2);
+    lcd.print(WiFi.softAPIP());
     server.WiFi_Config();
   }
   else
@@ -485,7 +489,7 @@ void connect_WiFi()
     WiFi.begin(ssid, password);
     lcd.setCursor(0, 0);
     lcd.print("Connecting to WiFi");
-    while (WiFi.status() != WL_CONNECTED)
+    while (WiFi.status() != WL_CONNECTED) // Try to connect wifi
     {
       delay(2000);
       count_retry++;
@@ -510,9 +514,7 @@ void connect_WiFi()
           }
           else if (key == '#')
           {
-            writeFile("/ssid.txt", "");
-            writeFile("/pass.txt", "");
-            ESP.restart();
+            wifiConfig();
           }
         }
       }
@@ -520,21 +522,145 @@ void connect_WiFi()
   }
 }
 
+void setAdminPass()
+{
+  lcd.clear();
+  data.Admin_Pass = ""; // Xoa Pass Cu
+  uint8_t xpos = 2;
+  while (data.Admin_Pass.length() < PasswordLength)
+  {
+    char key = customKeypad.getKey();
+    lcd.setCursor(0, 0);
+    lcd.print("Set PIN(4 Num)");
+    if (key >= '0' && key <= '9')
+    {
+      data.Admin_Pass += key;
+      lcd.setCursor(++xpos, 1);
+      lcd.print("*"); // Display asterisk for each input (like in real passwords)
+    }
+    else if (key == '*')
+    {
+      break;
+    }
+  }
+  lcd.clear();
+  writeStruct("/data.bin", data);
+}
+
+void resetAll()
+{
+  data.Admin_Pass = "";
+  data.Admin_UID = "";
+  data.UID_Result = "";
+  data.gio_start = 0;
+  data.phut_start = 0;
+  data.giay_start = 0;
+  check = false;
+  Status_start = true;
+  cardScanned = false;
+  passCorrect = false;
+  writeStruct("/data.bin", data);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Reseting...");
+  delay(1000);
+  ESP.restart();
+}
+
+void adminMenu()
+{
+  while (passCorrect)
+  {
+    char key = customKeypad.getKey();
+    lcd.setCursor(0, 0);
+    lcd.print("> 1.Set Password");
+    lcd.setCursor(0, 1);
+    lcd.print("> 2.Stop Worker");
+    lcd.setCursor(0, 2);
+    lcd.print("> 3.Change WiFi");
+    lcd.setCursor(0, 3);
+    lcd.print("> 4.Reset All");
+    switch (key)
+    {
+    case '1':
+      setAdminPass();
+      break;
+    case '2':
+      Stop_work(); // Xử lý thêm phần stop bằng thẻ admin
+      break;
+    case '3':
+      wifiConfig();
+      break;
+    case '4':
+      resetAll();
+      break;
+    case '*':
+      passCorrect = false;
+      lcd.clear();
+      break;
+    }
+  }
+}
+
+void detectAdmin()
+{
+  bool admin = false;
+  if (customKey == '9')
+  {
+    admin = true;
+  }
+  if (getUID() || admin == true)
+  {
+    if (UID == data.Admin_UID || admin == true)
+    {
+      UID = "";
+      lcd.clear();
+      String inputPass;
+      uint8_t xpos = 5;
+      while (inputPass != data.Admin_Pass && inputPass.length() < PasswordLength)
+      {
+        char key = customKeypad.getKey();
+        lcd.setCursor(7, 0);
+        lcd.print("PIN:");
+        if (key >= '0' && key <= '9')
+        {
+          inputPass += key;
+          lcd.setCursor(++xpos, 1);
+          lcd.print("*"); // Display asterisk for each input (like in real passwords)
+        }
+      }
+      if (inputPass == data.Admin_Pass)
+      {
+        passCorrect = true;
+        adminMenu();
+      }
+      else
+      {
+        lcd.clear();
+        lcd.setCursor(7, 0);
+        lcd.print("Wrong PIN");
+        delay(1000);
+        lcd.clear();
+        passCorrect = false;
+        UID = "";
+      }
+    }
+  }
+}
+
 void setup()
 {
-  // put your setup code here, to run once:
   Serial.begin(115200);
-  EEPROM_begin();
-  // Clear_EEPROM();
+  Setup_RFID();
+  readStruct("/data.bin", data);
+  Serial.println(data.Admin_UID);
   MAC_ID();
   lcd.backlight();
   lcd.begin();
-
   ssid = readFile(SPIFFS, "/ssid.txt");
   password = readFile(SPIFFS, "/pass.txt");
   Serial.printf("SSID: %s\n", ssid);
   Serial.printf("PASS: %s\n", password);
-
   lcd.clear();
   connect_WiFi(); // Kết nối wifi
   handleScan();   // Nhận lệnh scan wifi
@@ -547,20 +673,29 @@ void setup()
       &scanTaskHandle,  // Task handle
       1                 // CPU core
   );
-  while (WiFi.status() != WL_CONNECTED) // kh làm gì tới khi kết nối wifi thành công
+  while (WiFi.status() != WL_CONNECTED)
   {
     yield();
-  }
+  } // do nothing if wifi connect fail
   Setup_MQTT();
   Setup_Time();
-  Setup_RFID();
-  readFull_EEPROMData(); // Đọc giờ bắt đầu ca làm mỗi khi khởi động--> Sẽ chuyển qua lưu trong file luôn
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Loading....");
-  delay(1000);
-  lcd.clear();
-  readStruct("/data.bin", data);
+  while (data.Admin_UID == "")
+  {
+    lcd.setCursor(3, 0);
+    lcd.print("No Admin ID!");
+    lcd.setCursor(0, 2);
+    lcd.print("Please Scan Admin ID");
+    if (getUID())
+    {
+      data.Admin_UID = UID;
+      writeStruct("/data.bin", data);
+      Serial.print("Admin UID: ");
+      Serial.println(data.Admin_UID);
+      setAdminPass();
+      break;
+    }
+  }
   if (data.UID_Result == "")
   {
     lcd.clear();
@@ -585,20 +720,16 @@ void setup()
 
 void loop()
 {
-  if (!client.connected())
-  {
-    connect_to_broker();
-  }
-  client.loop();
   customKey = customKeypad.getKey();
   if (check)
   {
     Job_run();
     MQTT_tele();
   }
-  else
+  else // wait new worker
   {
     Start_Screen();
-    Save_EEPROM();
   }
+  client.loop();
+  detectAdmin();
 }

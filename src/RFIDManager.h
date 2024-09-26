@@ -3,8 +3,8 @@
 
 #include <MFRC522.h>
 
-
+extern String UID;
 void Setup_RFID();
 bool getUID();
-
+bool getAdminUID();
 #endif
