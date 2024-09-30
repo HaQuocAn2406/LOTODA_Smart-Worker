@@ -85,7 +85,7 @@ void LOTODA_Server::Handle_SubmitForm()
         int params = request->params();
         for (int i = 0; i < params; i++)
         {
-            AsyncWebParameter *p = request->getParam(i);
+            const AsyncWebParameter *p = request->getParam(i);
             if (p->isPost())
             {
                 // HTTP POST ssid value

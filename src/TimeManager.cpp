@@ -15,11 +15,15 @@ void Setup_Time()
     timeClient.setTimeOffset(+7 * 60 * 60);
 }
 
-void Time_start()
+void Get_Date()
 {
-    // Get_time_Start(); // Thời gian bắt đầu vào ca làm
-
-    // readStruct("/data.bin", data);
+  while (!timeClient.update())
+  {
+    timeClient.forceUpdate();
+  }
+  formattedDate = timeClient.getFormattedDate();
+  Serial.print("Date: ");
+  Serial.println(formattedDate);
 }
 
 void Get_time_Start()

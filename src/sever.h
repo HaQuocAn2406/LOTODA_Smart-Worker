@@ -2,6 +2,7 @@
 #ifndef SEVER_H
 #define SEVER_H
 #include <ESPAsyncWebServer.h>
+#include <AsyncTCP.h>
 #include <FS.h>
 #include <SPIFFS.h>
 class LOTODA_Server : public AsyncWebServer
