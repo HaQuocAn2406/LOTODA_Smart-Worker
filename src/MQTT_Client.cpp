@@ -1,6 +1,7 @@
 #include "MQTT_Client.h"
 #include "CONFIG.h"
 #include "_SPIFFS.h"
+#include "WiFi.h"
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 unsigned long lastRandomTime = 0;
@@ -20,12 +21,13 @@ bool connect_to_broker()
     {
       Serial.println("đã kết nối");
       Serial.println(data.UID_Result);
-      MQTT_Target_Topic = String(MQTT_USER) + "/tele/" + Device_ID + "/" + data.UID_Result + "/Target";
-      MQTT_Report_Topic = String(MQTT_USER) + "/report/" + Device_ID + "/" + data.UID_Result + "/Request";
-      MQTT_Mess_Topic = String(MQTT_USER) + "/mess/" + Device_ID + "/" + data.UID_Result + "/Message";
+      MQTT_Target_Topic = String(MQTT_USER) + "/tele/" + data.UID_Result + "/Target";
+      MQTT_Report_Topic = String(MQTT_USER) + "/report/" + Device_ID + "/Request";
+      MQTT_Mess_Topic = String(MQTT_USER) + "/mess/" + Device_ID + "/Message";
       client.subscribe(MQTT_Target_Topic.c_str());
       client.subscribe(MQTT_Report_Topic.c_str());
       client.subscribe(MQTT_Mess_Topic.c_str());
+      push_Status();
       return true;
     }
     else
@@ -44,15 +46,19 @@ bool connect_to_broker()
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
+  String MQTT_Respond_Topic = String(MQTT_USER) + "/respond/" + Device_ID + "/Status";
   if (strcmp(topic, MQTT_Target_Topic.c_str()) == 0)
   {
     // Xử lý dữ liệu từ MQTT_TAGET_TOPIC
+    String _payload;
+    isNewTarge = true;
     Serial.println("Received message from MQTT_TAGET_TOPIC:");
     Serial.write(payload, length);
     Serial.println();
-    data.target = String((char *)payload, length);
+    _payload = String((char *)payload, length);
+    data.target = _payload.toInt();
     writeStruct("/data.bin", data);
-    Serial.println(data.target);
+    client.publish(MQTT_Respond_Topic.c_str(), "Recv Success");
   }
   else if (strcmp(topic, MQTT_Mess_Topic.c_str()) == 0)
   {
@@ -62,6 +68,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     Serial.println();
     mess = String((char *)payload, length);
     Serial.println(mess);
+    client.publish(MQTT_Respond_Topic.c_str(), "Recv Success");
   }
 }
 
@@ -72,50 +79,89 @@ void Setup_MQTT()
   connect_to_broker();
 }
 
-void push_mqtt1(String Time, String Mac, String UID_Result, String timeString, String time_end_String, String time_work_String, int result_product, int result_error, const char *_target)
+bool push_Worker(String startTime, String endTime, String workTime)
 {
   if (data.UID_Result == "")
   {
-    return;
+    return false;
   }
-  String topic_sensor = String(MQTT_USER) + "/tele/" + Mac + "/" + data.UID_Result + "/Time_Work";
-  const char *topic_sensor_cstr = topic_sensor.c_str();
-  // const size_t bufferSize = JSON_OBJECT_SIZE(5) + UID_Result.length() + timeString.length() + time_end_String.length() + 20 + time_work_String.length() + 20 + result + 20 + result_error + 20;
+  String topic_sensor = String(MQTT_USER) + "/tele/" + data.UID_Result + "/Time_Work";
   JsonDocument jsonDocument;
-  jsonDocument["Time"] = Time;
-  jsonDocument["Uid"] = data.UID_Result;
-  jsonDocument["TimeStart"] = timeString;
-  jsonDocument["Time_End"] = time_end_String;
-  jsonDocument["Time_Work"] = time_work_String;
+  jsonDocument["Time"] = timeClient.getFormattedDate();
+  jsonDocument["UserID"] = data.UID_Result;
+  jsonDocument["TimeStart"] = startTime;
+  jsonDocument["TimeEnd"] = endTime;
+  jsonDocument["TimeWork"] = time_work_String;
   jsonDocument["Product"] = data.product;
-  jsonDocument["Error"] = data.error;
-  // jsonDocument["Target"] = target;
+  jsonDocument["Diff"] = data.error;
+  jsonDocument["Target"] = data.target;
+  jsonDocument["deviceID"] = Device_ID;
   String jsonString;
   serializeJson(jsonDocument, jsonString);
   char payload[jsonString.length() + 1];
   jsonString.toCharArray(payload, jsonString.length() + 1);
-  client.publish(topic_sensor_cstr, payload);
-  // client.publish(MQTT_Target_Topic.c_str(), _target);
-  Serial.println("đã gửi MQTT xong");
+  if (client.publish(topic_sensor.c_str(), payload))
+  {
+    Serial.println("đã gửi Thông Tin Worker xong");
+    return true;
+  }
+  return false;
 }
-
-void push_report(char code)
+bool push_Status()
+{
+  String MQTT_Status_Topic = String(MQTT_USER) + "/tele/" + "Device" + "/" + Device_ID;
+  JsonDocument jsonDocument;
+  jsonDocument["Time"] = timeClient.getFormattedDate();
+  jsonDocument["SSID"] = WiFi.SSID();
+  jsonDocument["RSSI"] = WiFi.RSSI();
+  jsonDocument["IP"] = WiFi.localIP();
+  jsonDocument["deviceID"] = Device_ID;
+  if (isWorking)
+  {
+    jsonDocument["status"] = "Working";
+  }
+  else
+  {
+    jsonDocument["status"] = "Free";
+  }
+  String jsonString;
+  serializeJson(jsonDocument, jsonString);
+  char payload[jsonString.length() + 1];
+  jsonString.toCharArray(payload, jsonString.length() + 1);
+  if (client.publish(MQTT_Status_Topic.c_str(), payload))
+  {
+    Serial.println("đã gửi STATUS  xong");
+    return true;
+  }
+  return false;
+}
+bool push_report(char code)
 {
   switch (code)
   {
   case '1':
     // const char* payload = "Yêu Cầu Bổ Sung Vật Liệu";
-    client.publish(MQTT_Report_Topic.c_str(), "Yêu Cầu Bổ Sung Vật Liệu");
-    break;
+    if (client.publish(MQTT_Report_Topic.c_str(), "Yêu Cầu Bổ Sung Vật Liệu"))
+    {
+      return true;
+    }
   case '2':
-    client.publish(MQTT_Report_Topic.c_str(), "Sự Cố Máy Móc");
-    break;
+    if (client.publish(MQTT_Report_Topic.c_str(), "Sự Cố Máy Móc"))
+    {
+      return true;
+    }
   case '3':
-    client.publish(MQTT_Report_Topic.c_str(), "Tình Huống Khẩn Cấp !!!");
-    break;
+    if (client.publish(MQTT_Report_Topic.c_str(), "Tình Huống Khẩn Cấp !!!"))
+    {
+      return true;
+    }
   default:
-    break;
+    if (client.publish(MQTT_Report_Topic.c_str(), "Null"))
+    {
+      return true;
+    }
   }
+  return false;
 }
 
 void MQTT_tele()
@@ -124,7 +170,8 @@ void MQTT_tele()
   if (currentTime - lastRandomTime >= Interval)
   {
     // push_mqtt(formattedDate,Device_ID ,UID_Result, timeString);
-    push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error, data.target.c_str());
     lastRandomTime = currentTime;
+    push_Status();
+    push_Worker(timeString, time_end_String, time_work_String);
   }
 }

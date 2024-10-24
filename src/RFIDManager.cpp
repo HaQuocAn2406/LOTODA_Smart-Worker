@@ -53,6 +53,4 @@ void Setup_RFID()
   SPI.begin();
   mfrc522.PCD_Init();
   delay(500);
-  Serial.println();
-  Serial.println("Please tap your card or key chain to the RFID-RC522 module.");
 }

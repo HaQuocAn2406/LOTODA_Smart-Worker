@@ -10,7 +10,7 @@
 #include "_SPIFFS.h"
 #include <ElegantOTA.h>
 #include "OTA.h"
-// #define AC_SSID "LOTODA WiFi Config"
+
 #define APIKEY "b182dce6-64e4-4650-972c-588489ec0fcc"
 #define FILESYS SPIFFS
 #define AC_PASS "12345678"
@@ -21,22 +21,24 @@ LCD_I2C lcd(0x3F, 20, 4); // Default address of most PCF8574 modules, change acc
 LOTODA_Server server;
 
 Data data;
-bool check = false;
+bool enter2Menu = false;
+bool isNewTarge = false;
+bool isWarning = false;
+bool isWorking = false;
 bool scanning = false;
 bool cardScanned = false;
 bool writingToEEPROM = false;
 bool Status_start = true;
 bool passCorrect = false;
+char report_key;
 char customKey;
 String wifiScanResult = "[]";
 String timeString, time_end_String;
-String formattedDate;
 String data_time_start = "";
 String Device_ID;
 String ssid = "", password = "";
 String AC_SSID;
-int gio, phut, giay;
-
+void adminMenu();
 void handleScan()
 {
   server.on("/scan", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -142,37 +144,25 @@ void onUpdateProgress(int progress, int totalt)
 void Time_Start()
 {
   Get_time_Start();
-  Get_Date();
-  // push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error);
-  Status_start = false;
-  cardScanned = false; // Reset trạng thái đã quét thẻ
-  check = true;
+  // Get_Date();
 }
 
 void Time_end()
 {
   Get_time_End();
-  time_end_String = String(gio_end) + ":" + String(phut_end) + ":" + String(giay_end);
-  Serial.print("time_end");
-  Serial.print(":");
-  Serial.print(gio_end);
-  Serial.print(":");
-  Serial.print(phut_end);
-  Serial.print(":");
-  Serial.println(giay_end);
 }
 
 void Time_work()
 {
   readStruct("/data.bin", data);
   Working_Time(data.gio_start, data.phut_start, data.giay_start);
-  Serial.print("time_work");
-  Serial.print(":");
-  Serial.print(gio_lam_viec);
-  Serial.print(":");
-  Serial.print(phut_lam_viec);
-  Serial.print(":");
-  Serial.println(giay_lam_viec);
+  // Serial.print("time_work");
+  // Serial.print(":");
+  // Serial.print(gio_lam_viec);
+  // Serial.print(":");
+  // Serial.print(phut_lam_viec);
+  // Serial.print(":");
+  // Serial.println(giay_lam_viec);
   lcd.clear();
   lcd.setCursor(3, 0);
   lcd.print("Time work ");
@@ -227,29 +217,30 @@ void nonBlockingScroll(int row)
 
 void Working_Screen()
 {
+  timeClient.update();
   lcd.setCursor(0, 0);
   lcd.print("ID:");
   lcd.print(data.UID_Result);
   lcd.setCursor(11, 0);
   lcd.print("  ");
   lcd.setCursor(12, 0);
-  if (gio < 10)
+  if (timeClient.getHours() < 10)
   {
     lcd.print("0");
   }
-  lcd.print(gio);
+  lcd.print(timeClient.getHours());
   lcd.print(":");
-  if (phut < 10)
+  if (timeClient.getMinutes() < 10)
   {
     lcd.print("0");
   }
-  lcd.print(phut);
+  lcd.print(timeClient.getMinutes());
   lcd.print(":");
-  if (giay < 10)
+  if (timeClient.getSeconds() < 10)
   {
     lcd.print("0");
   }
-  lcd.print(giay);
+  lcd.print(timeClient.getSeconds());
   lcd.setCursor(0, 1);
   lcd.print("D-Pr: ");
   if (data.product >= 999)
@@ -269,22 +260,17 @@ void Working_Screen()
   lcd.setCursor(0, 3);
   lcd.print("Target: ");
   lcd.setCursor(8, 3);
+  if (isNewTarge)
+  {
+    lcd.clear();
+    isNewTarge = false;
+  }
   lcd.print(data.target);
   lcd.setCursor(0, 2);
   lcd.print("Msg :");
   nonBlockingScroll(2);
   lcd.setCursor(13, 3);
   lcd.print("C-Stop");
-}
-
-void Read_time()
-{
-  /*chương trình lấy thời gian thực để hiển thị*/
-  timeClient.update();
-  gio = timeClient.getHours();
-  phut = timeClient.getMinutes();
-  giay = timeClient.getSeconds();
-  Working_Screen();
 }
 
 void Start_Screen()
@@ -328,14 +314,16 @@ void Start_Screen()
         }
         else
         {
-          writeStruct("/data.bin", data);
           Time_Start();
-          delay(2000);
           lcd.clear();
           lcd.setCursor(5, 1);
           lcd.print("DONE!");
+          writeStruct("/data.bin", data);
           delay(2000);
           lcd.clear();
+          Status_start = false;
+          cardScanned = false; // Reset trạng thái đã quét thẻ
+          isWorking = true;
           break; // Thoát khỏi vòng lặp khi đã đọc thành công thẻ
         }
       }
@@ -387,18 +375,37 @@ void Stop_Screen()
       {
         Time_end();
         Time_work();
-        Get_Date();
-        push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error, data.target.c_str());
-        data.UID_Result = "";
-        time_end_String = "";
-        time_work_String = "";
+        // Get_Date();
+        lcd.clear();
+        lcd.setCursor(3, 1);
+        lcd.print("Processing.....");
+        delay(500);
+        if (push_Worker(timeString, time_end_String, time_work_String) != true)
+        {
+          lcd.clear();
+          lcd.setCursor(2, 1);
+          lcd.print("Fail,Try Again");
+          delay(500);
+          lcd.clear();
+          break;
+        }
+        else
+        {
+          lcd.clear();
+          lcd.setCursor(3, 1);
+          lcd.print("!! Success !!");
+        }
         mess = "";
+        data.UID_Result = "";
         data.error = 0;
         data.product = 0;
-        data.target = "0";
-        check = false;
-        Status_start = true;
+        data.target = 0;
+        timeString = "";
+        time_end_String = "";
+        time_work_String = "";
         writeStruct("/data.bin", data);
+        isWorking = false;
+        Status_start = true;
         delay(2000);
         lcd.clear();
         break; // Thoát khỏi vòng lặp sau khi quét thẻ thành công
@@ -408,7 +415,6 @@ void Stop_Screen()
         lcd.clear();
         lcd.setCursor(3, 1);
         lcd.print("Wrong Card");
-        Serial.println("no");
         delay(1000);
         break; // Thoát khỏi vòng lặp sau khi quét thẻ thành công
       }
@@ -527,7 +533,7 @@ void Enter_Error()
 
 void Job_run()
 {
-  Read_time();
+  Working_Screen();
   switch (customKey)
   {
   case 'C':
@@ -539,37 +545,82 @@ void Job_run()
   case 'B':
     Enter_Error();
     break;
+  default:
+    break;
+  }
+}
+
+void handle_Report(char report_key)
+{
+  static unsigned long preMillis = 0;
+  if ((millis() - preMillis >= 1000 * 10) && isWarning == true)
+  {
+    preMillis = millis();
+    if (push_report(report_key) == true)
+    {
+      lcd.clear();
+      lcd.setCursor(4, 1);
+      lcd.print("Report Sent");
+      lcd.setCursor(4, 2);
+      lcd.printf("Code:%c", report_key);
+      Serial.printf("Report Sent with code: %c\n", report_key);
+      delay(500);
+      lcd.clear();
+    }
+    else
+    {
+      lcd.clear();
+      lcd.setCursor(2, 1);
+      lcd.print("Report Sent Fail");
+      delay(500);
+      lcd.clear();
+    }
   }
 }
 
 void report()
 {
-  char key;
   lcd.clear();
+  char temp;
   do
   {
-    key = customKeypad.getKey();
+    temp = customKeypad.getKey();
     lcd.setCursor(0, 0);
     lcd.print("> 1.Out Of Material");
     lcd.setCursor(0, 1);
     lcd.print("> 2.Machine Failure");
-    lcd.setCursor(0, 3);
+    lcd.setCursor(0, 2);
     lcd.print("> 3.Urgent Request");
-    switch (key)
+    lcd.setCursor(0, 3);
+    lcd.print("> 4.OFF Warning");
+    switch (temp)
     {
     case '1':
     case '2':
     case '3':
+      isWarning = true;
+      report_key = temp;
+      push_report(report_key);
       lcd.clear();
       lcd.setCursor(4, 1);
       lcd.print("Resquest Sent");
-      Serial.printf("Request Sent with code: %c\n", key);
-      push_report(key);
+      Serial.printf("Request Sent with code: %c\n", report_key);
       delay(2000);
       lcd.clear();
       break;
+    case '4':
+      isWarning = false;
+      if (push_report('*'))
+      {
+        lcd.clear();
+        lcd.setCursor(2, 1);
+        lcd.print("Warning OFF");
+        delay(1000);
+        lcd.clear();
+      }
+      break;
     }
-  } while (key != '*');
+  } while (temp != '*');
   lcd.clear();
 }
 
@@ -691,10 +742,12 @@ void resetAll()
   data.Admin_Pass = "";
   data.Admin_UID = "";
   data.UID_Result = "";
+  data.timeStart = "";
+  data.target=0;
   data.gio_start = 0;
   data.phut_start = 0;
   data.giay_start = 0;
-  check = false;
+  isWorking = false;
   Status_start = true;
   cardScanned = false;
   passCorrect = false;
@@ -751,9 +804,56 @@ void wifiMenu()
   }
 }
 
+void secondAdminMenu()
+{
+  lcd.clear();
+  while (enter2Menu)
+  {
+    char key = customKeypad.getKey();
+    lcd.setCursor(0, 0);
+    lcd.print("> 1.Add Admin");
+    lcd.setCursor(0, 1);
+    lcd.print("> 2.List Admin");
+    lcd.setCursor(0, 2);
+    lcd.print("> 3.Remove Admin");
+    lcd.setCursor(0, 3);
+    lcd.print("> 4.Reset All");
+    switch (key)
+    {
+    case '1':
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Developing....");
+      delay(1000);
+      break;
+    case '2':
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Developing....");
+      delay(1000);
+      break;
+    case '3':
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Developing....");
+      delay(1000);
+      break;
+    case '4':
+      resetAll();
+      break;
+    case '*':
+      lcd.clear();
+      enter2Menu = false;
+      adminMenu();
+      break;
+    }
+  }
+}
+
 void adminMenu()
 {
-  while (passCorrect)
+  lcd.clear();
+  while (passCorrect && enter2Menu == false)
   {
     char key = customKeypad.getKey();
     lcd.setCursor(0, 0);
@@ -763,7 +863,7 @@ void adminMenu()
     lcd.setCursor(0, 2);
     lcd.print("> 3.WiFi");
     lcd.setCursor(0, 3);
-    lcd.print("> 4.Reset All");
+    lcd.print("> 4.Setting");
     switch (key)
     {
     case '1':
@@ -776,7 +876,8 @@ void adminMenu()
       wifiMenu();
       break;
     case '4':
-      resetAll();
+      enter2Menu = true;
+      secondAdminMenu();
       break;
     case '*':
       passCorrect = false;
@@ -788,19 +889,19 @@ void adminMenu()
 
 void detectAdmin()
 {
-  bool admin = false;
+  bool isAdmin = false;
   if (customKey == '9')
   {
-    admin = true;
+    isAdmin = true;
   }
-  if (getUID() || admin == true)
+  if (getUID() || isAdmin == true)
   {
-    if (UID == data.Admin_UID || admin == true)
+    if (UID == data.Admin_UID || isAdmin == true)
     {
       lcd.clear();
       String inputPass;
       uint8_t xpos = 5;
-      while (inputPass != data.Admin_Pass && inputPass.length() < PasswordLength && admin == true)
+      while (inputPass != data.Admin_Pass && inputPass.length() < PasswordLength && isAdmin == true)
       {
         char key = customKeypad.getKey();
         lcd.setCursor(7, 0);
@@ -840,7 +941,9 @@ void setup()
 {
   Serial.begin(115200);
   Setup_RFID();
+  init_SPIFFS();
   readStruct("/data.bin", data);
+  Serial.println(data.timeStart);
   Serial.println(data.Admin_UID);
   MAC_ID();
   AC_SSID = Device_ID;
@@ -866,9 +969,8 @@ void setup()
   {
     yield();
   } // do nothing if wifi connect fail
-  // Serial.println(WiFi.localIP());
-  Setup_MQTT();
   Setup_Time();
+  Setup_MQTT();
   lcd.clear();
   while (data.Admin_UID == "")
   {
@@ -891,29 +993,30 @@ void setup()
     lcd.clear();
     lcd.setCursor(3, 0);
     lcd.print("Welcome Back!");
-    timeString = String(data.gio_start) + ":" + String(data.phut_start) + ":" + String(data.giay_start);
+    timeString = data.subTime + data.timeStart;
     lcd.setCursor(3, 1);
     lcd.print("ID:");
     lcd.print(data.UID_Result);
     delay(3000);
+
     lcd.clear();
-    check = true;
+    isWorking = true;
   }
-  // push_mqtt1(formattedDate, Device_ID, data.UID_Result, timeString, time_end_String, time_work_String, data.product, data.error, target.c_str());
 }
 
 void loop()
 {
   customKey = customKeypad.getKey();
   detectAdmin();
-  if (check)
+  MQTT_tele();
+  handle_Report(report_key);
+  if (isWorking)
   {
     Job_run();
     if (customKey == 'A')
     {
       report();
     }
-    MQTT_tele();
   }
   else // wait new worker
   {

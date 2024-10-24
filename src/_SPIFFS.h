@@ -3,6 +3,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include "CONFIG.h"
+void init_SPIFFS();
 void writeFile(const char *path, const char *message);
 
 String readFile(fs::SPIFFSFS &fs, const char *path);

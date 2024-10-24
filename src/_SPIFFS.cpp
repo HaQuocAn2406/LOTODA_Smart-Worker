@@ -1,5 +1,13 @@
 #include "_SPIFFS.h"
 // Data mydata;
+void init_SPIFFS(){
+  if(SPIFFS.begin() !=true)
+  {
+    Serial.println("Init SPIFFS Fail");
+  }else{
+    Serial.println("Init SPIFFS Success");
+  }
+}
 void writeFile(const char *path, const char *message)
 {
   File file = SPIFFS.open(path, FILE_WRITE);
